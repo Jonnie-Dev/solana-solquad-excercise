@@ -73,29 +73,37 @@ pub mod solquad {
         let escrow_account = &mut ctx.accounts.escrow_account;
         let pool_account = &mut ctx.accounts.pool_account;
         let project_account = &mut ctx.accounts.project_account;
-  
+    
         for i in 0..escrow_account.project_reciever_addresses.len() {
             let distributable_amt: u64;
             let votes: u64;
-
+    
             let project = pool_account.projects[i];
             if project == project_account.project_owner {
                 votes = project_account.votes_count;
             } else {
                 votes = 0;
             }
-
+    
             if votes != 0 {
-                distributable_amt = (votes / pool_account.total_votes) * escrow_account.creator_deposit_amount as u64;
+                // Use checked arithmetic to handle potential overflows
+                if let Some(distributable) = votes.checked_mul(escrow_account.creator_deposit_amount as u64)
+                    .and_then(|result| result.checked_div(pool_account.total_votes)) {
+                    distributable_amt = distributable;
+                } else {
+                    // Handle overflow case
+                    return Err(ErrorCode::ArithmeticOverflow.into());
+                }
             } else {
                 distributable_amt = 0;
             }
-
+    
             project_account.distributed_amt = distributable_amt;
         }
-
+    
         Ok(())
     }
+    
 }
 
 #[derive(Accounts)]
